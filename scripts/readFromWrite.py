@@ -1,6 +1,7 @@
 # Read node generator v1.4, 2014-08-26
 # by Fredrik Averpil, fredrik.averpil [at] gmail.com, http://fredrikaverpil.tumblr.com
-# 
+# forked version 1.5 by Richard Frazer www.richardfrazer.com
+# -- fixes bug with start and end frames being incorrectly calculated on Linux
 #
 # Usage: select any Write node and run readFromWrite() after having sourced this file, or put the following in your menu.py:
 # import readFromWrite
@@ -18,8 +19,8 @@ import re
 def searchForInString(string, searchPattern):
 	# Look for %04d
 	reMatch = re.search(searchPattern, string)
-	# if reMatch:
-		# print('reMatch for ' + string + ': ' + str(reMatch) )
+	if reMatch:
+		print('reMatch for ' + string + ': ' + str(reMatch) )
 	
 	return reMatch
 
@@ -98,7 +99,7 @@ def readFromWrite():
 		filename = filePathSplitted[ len(filePathSplitted)-1 ]
 
 		# Debug
-		# print('Write node says: ' + filename)
+		print('Write node says: ' + filename)
 
 		# Let's look for #### or %04d
 		searchPattern = '(#+)|(%\d\d?d)'
@@ -106,6 +107,7 @@ def readFromWrite():
 
 		# If framerange was not found we assume we are dealing with a movie file or a single image file
 		if not frameRangeFound:
+			print('framerange was not found')
 			# Create the read node
 			node = nuke.createNode( "Read", "file "+selectedNodeFilePath )
 			
@@ -125,8 +127,8 @@ def readFromWrite():
 			sourcePrefix, sourceSuffix = filename.split('.%04d.')
 
 			# Debug
-			# print('We are looking for: ' + sourcePrefix + ' of type ' + filetype)
-			# print('Look for them in directory: ' + filePath)
+			print('We are looking for: ' + sourcePrefix + ' of type ' + filetype)
+			print('Look for them in directory: ' + filePath)
 
 			
 			# See if we can list the folder's files
@@ -140,8 +142,8 @@ def readFromWrite():
 
 			# Setting some defaults
 			framerangeFound = False
-			firstFrame = 'Not set'
-			lastFrame = 'Not set'
+			firstFrame = 100000000
+			lastFrame = -100000000
 			fileFound = False
 
 
@@ -163,14 +165,18 @@ def readFromWrite():
 
 							dump, frame, dump = reMatch.group(0).split('.')
 
-							if firstFrame == 'Not set':
-								firstFrame = frame
-							else:
-								lastFrame = frame
-
+							if int(frame) < int(firstFrame): 
+								firstFrame = int(frame)
+								# print('firstFrame: ' + str(firstFrame))
+							if int(frame) > int(lastFrame): 
+								lastFrame = int(frame)
+								# print('lastFrame: ' + str(lastFrame))
 
 
 				if fileFound == True:
+
+					print('firstFrame: ' + str(firstFrame))
+					print('lastFrame: ' + str(lastFrame))
 
 					# Change %04d to ####
 					selectedNodeFilePath = str.replace(selectedNodeFilePath, '%04d', '####')
@@ -181,14 +187,18 @@ def readFromWrite():
 					# Check for framerange, and if not found use the frameranges from the project settings
 					if framerangeFound == False:
 						# Long shot guess for framerange (from settings)
+						print ('No framerange found - guessing')
 						firstFrame = str(int(nuke.root()['first_frame'].getValue()))
 						lastFrame = str(int(nuke.root()['last_frame'].getValue()))
 						node.knob('first').fromScript(firstFrame)
 						node.knob('last').fromScript(lastFrame)
 
+					print('firstFrame: ' + str(firstFrame))
+					print('lastFrame: ' + str(lastFrame))
+
 					# Set the framerange
-					node.knob('first').fromScript(firstFrame)
-					node.knob('last').fromScript(lastFrame)
+					node.knob('first').setValue(firstFrame)
+					node.knob('last').setValue(lastFrame)
 
 					# Nicely placement of nodes
 					node.setXpos( selectedNodeXpos )
@@ -212,4 +222,3 @@ def readFromWrite():
 				# If no framerange was found from an image sequence
 				elif framerangeFound == False:
 					nuke.message('I was unable to figure out the frame range and guessed it was ' + firstFrame + '-' + lastFrame + ', based on the project settings. Please check it manually.')
-
